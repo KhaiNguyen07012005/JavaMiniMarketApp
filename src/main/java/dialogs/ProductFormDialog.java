@@ -2,6 +2,7 @@ package dialogs;
 
 import java.awt.BorderLayout;
 import java.awt.Color;
+import java.awt.Component;
 import java.awt.Cursor;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
@@ -19,12 +20,14 @@ import java.text.SimpleDateFormat;
 import java.util.List;
 
 import javax.swing.BorderFactory;
+import javax.swing.DefaultListCellRenderer;
 import javax.swing.ImageIcon;
 import javax.swing.JButton;
 import javax.swing.JComboBox;
 import javax.swing.JDialog;
 import javax.swing.JFileChooser;
 import javax.swing.JLabel;
+import javax.swing.JList;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JTextField;
@@ -77,16 +80,52 @@ public class ProductFormDialog extends JDialog {
 		var lblMaLoai = createLabel("Loại SP:");
 		cbMaLoai = new JComboBox<>();
 		loadCategories(categories, tenLoai);
+		// Thêm renderer để hiển thị TenLoai
+		cbMaLoai.setRenderer(new DefaultListCellRenderer() {
+			@Override
+			public Component getListCellRendererComponent(JList<?> list, Object value, int index, boolean isSelected,
+					boolean cellHasFocus) {
+				super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
+				if (value instanceof Category) {
+					setText(((Category) value).getTenLoai());
+				}
+				return this;
+			}
+		});
 		lblMaLoai.setToolTipText("Chọn loại sản phẩm");
 
 		var lblMaNCC = createLabel("Nhà CC:");
 		cbMaNCC = new JComboBox<>();
 		loadSuppliers(suppliers, tenNCC);
+		// Thêm renderer để hiển thị TenNCC
+		cbMaNCC.setRenderer(new DefaultListCellRenderer() {
+			@Override
+			public Component getListCellRendererComponent(JList<?> list, Object value, int index, boolean isSelected,
+					boolean cellHasFocus) {
+				super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
+				if (value instanceof Supplier) {
+					setText(((Supplier) value).getTenNCC());
+				}
+				return this;
+			}
+		});
 		lblMaNCC.setToolTipText("Chọn nhà cung cấp");
 
 		var lblMaDVT = createLabel("ĐV Tính:");
 		cbMaDVT = new JComboBox<>();
 		loadUnits(units, tenDVT);
+		// Thêm renderer để hiển thị TenDVT
+		cbMaDVT.setRenderer(new DefaultListCellRenderer() {
+			@Override
+			public Component getListCellRendererComponent(JList<?> list, Object value, int index, boolean isSelected,
+					boolean cellHasFocus) {
+				super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
+				if (value instanceof Unit) {
+					setText(((Unit) value).getTenDVT());
+				}
+				return this;
+			}
+		});
 		lblMaDVT.setToolTipText("Chọn đơn vị tính");
 
 		var lblDonGia = createLabel("Đơn giá:");
@@ -347,11 +386,11 @@ public class ProductFormDialog extends JDialog {
 		}
 		var destFile = new File(destDir, sourceFile.getName());
 		Files.copy(sourceFile.toPath(), destFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
-		return destFile.getName(); // Lưu tên file thay vì đường dẫn tuyệt đối
+		return destFile.getName();
 	}
 
 	private void removeImage() {
-		imagePath = "";
+		imagePath = null;
 		lblImagePath.setText("Chưa chọn ảnh");
 		lblImagePreview.setIcon(null);
 	}
