@@ -7,6 +7,8 @@ import java.awt.Cursor;
 import java.awt.FlowLayout;
 import java.awt.Font;
 import java.awt.Frame;
+import java.awt.Image;
+import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.List;
 
@@ -127,7 +129,7 @@ public class ProductPanel extends JPanel {
 		add(contentPanel, BorderLayout.PAGE_START);
 
 		String[] columns = { "Mã SP", "Tên SP", "Loại", "Nhà CC", "ĐV Tính", "Đơn giá", "Số lượng tồn", "Hạn sử dụng",
-				"Thao tác" };
+				"Hình ảnh", "Thao tác" };
 		tableModel = new DefaultTableModel(columns, 0) {
 			@Override
 			public boolean isCellEditable(int row, int column) {
@@ -175,7 +177,37 @@ public class ProductPanel extends JPanel {
 		column = table.getColumnModel().getColumn(7);
 		column.setPreferredWidth(100);
 		column = table.getColumnModel().getColumn(8);
+		column.setPreferredWidth(100); // Điều chỉnh kích thước cột Hình ảnh
+		column = table.getColumnModel().getColumn(9);
 		column.setPreferredWidth(150);
+
+		// Tùy chỉnh renderer cho cột Hình ảnh
+		table.getColumnModel().getColumn(8).setCellRenderer(new DefaultTableCellRenderer() {
+			@Override
+			public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected,
+					boolean hasFocus, int row, int column) {
+				var label = (JLabel) super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row,
+						column);
+				if (value instanceof String && !((String) value).isEmpty()) {
+					try {
+						var icon = new ImageIcon("images/products/" + value);
+						if (icon.getImage() != null) {
+							var img = icon.getImage().getScaledInstance(50, 50, Image.SCALE_SMOOTH);
+							label.setIcon(new ImageIcon(img));
+						} else {
+							label.setText("No Image");
+						}
+					} catch (Exception e) {
+						label.setText("Error Loading");
+					}
+				} else {
+					label.setIcon(null);
+					label.setText("No Image");
+				}
+				label.setHorizontalAlignment(JLabel.CENTER);
+				return label;
+			}
+		});
 
 		var scrollPane = new JScrollPane(table);
 		scrollPane.setBorder(BorderFactory.createLineBorder(new Color(180, 200, 230)));
@@ -259,7 +291,7 @@ public class ProductPanel extends JPanel {
 				var row = table.rowAtPoint(e.getPoint());
 				var col = table.columnAtPoint(e.getPoint());
 
-				if (row >= 0 && col == 8) {
+				if (row >= 0 && col == 9) {
 					var maSP = (String) tableModel.getValueAt(row, 0);
 					var tenSP = (String) tableModel.getValueAt(row, 1);
 					var tenLoai = (String) tableModel.getValueAt(row, 2);
@@ -268,10 +300,11 @@ public class ProductPanel extends JPanel {
 					var donGia = tableModel.getValueAt(row, 5).toString();
 					var soLuongTon = tableModel.getValueAt(row, 6).toString();
 					var hanSuDung = tableModel.getValueAt(row, 7).toString();
+					var imagePath = tableModel.getValueAt(row, 8).toString();
 
 					var x = e.getX() - table.getCellRect(row, col, false).x;
 					if (x < 60) {
-						editProduct(maSP, tenSP, tenLoai, tenNCC, tenDVT, donGia, soLuongTon, hanSuDung);
+						editProduct(maSP, tenSP, tenLoai, tenNCC, tenDVT, donGia, soLuongTon, hanSuDung, imagePath);
 					} else {
 						deleteProduct(maSP);
 					}
@@ -322,14 +355,17 @@ public class ProductPanel extends JPanel {
 
 	private ImageIcon loadIcon(String path) {
 		try {
-			var icon = new ImageIcon(getClass().getResource(path));
-			if (icon.getImage() == null) {
-				System.err.println("Icon not found: " + path);
-				return null;
+			var imgURL = getClass().getResource(path);
+			if (imgURL != null) {
+				var icon = new ImageIcon(imgURL);
+				if (icon.getImage() != null) {
+					return icon;
+				}
 			}
-			return icon;
+			System.err.println("Icon không tìm thấy: " + path);
+			return null;
 		} catch (Exception e) {
-			System.err.println("Error loading icon: " + path + " - " + e.getMessage());
+			System.err.println("Lỗi tải icon: " + path + " - " + e.getMessage());
 			return null;
 		}
 	}
@@ -367,7 +403,7 @@ public class ProductPanel extends JPanel {
 			String sql;
 			if (searchKeyword.isEmpty()) {
 				sql = """
-						SELECT sp.MaSP, sp.TenSP, lsp.TenLoai, ncc.TenNCC, dvt.TenDVT, sp.DonGia, sp.SoLuongTon, sp.HanSuDung
+						SELECT sp.MaSP, sp.TenSP, lsp.TenLoai, ncc.TenNCC, dvt.TenDVT, sp.DonGia, sp.SoLuongTon, sp.HanSuDung, sp.ImagePath
 						FROM SANPHAM sp
 						LEFT JOIN LOAISP lsp ON sp.MaLoai = lsp.MaLoai
 						LEFT JOIN NHACUNGCAP ncc ON sp.MaNCC = ncc.MaNCC
@@ -376,7 +412,7 @@ public class ProductPanel extends JPanel {
 						OFFSET ? ROWS FETCH NEXT ? ROWS ONLY""";
 			} else {
 				sql = """
-						SELECT sp.MaSP, sp.TenSP, lsp.TenLoai, ncc.TenNCC, dvt.TenDVT, sp.DonGia, sp.SoLuongTon, sp.HanSuDung
+						SELECT sp.MaSP, sp.TenSP, lsp.TenLoai, ncc.TenNCC, dvt.TenDVT, sp.DonGia, sp.SoLuongTon, sp.HanSuDung, sp.ImagePath
 						FROM SANPHAM sp
 						LEFT JOIN LOAISP lsp ON sp.MaLoai = lsp.MaLoai
 						LEFT JOIN NHACUNGCAP ncc ON sp.MaNCC = ncc.MaNCC
@@ -408,12 +444,13 @@ public class ProductPanel extends JPanel {
 					var donGia = String.format("%.2f", rs.getDouble("DonGia"));
 					var soLuongTon = String.valueOf(rs.getInt("SoLuongTon"));
 					var hanSuDung = rs.getDate("HanSuDung") != null ? rs.getDate("HanSuDung").toString() : "";
+					var imagePath = rs.getString("ImagePath") != null ? rs.getString("ImagePath") : "";
 
 					tableModel.addRow(new Object[] { maSP, tenSP, tenLoai, tenNCC, tenDVT, donGia, soLuongTon,
-							hanSuDung, "Sửa | Xóa" });
+							hanSuDung, imagePath, "Sửa | Xóa" });
 				}
 
-				table.getColumnModel().getColumn(8).setCellRenderer(new DefaultTableCellRenderer() {
+				table.getColumnModel().getColumn(9).setCellRenderer(new DefaultTableCellRenderer() {
 					@Override
 					public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected,
 							boolean hasFocus, int row, int column) {
@@ -473,9 +510,10 @@ public class ProductPanel extends JPanel {
 
 		if (dialog.isConfirmed()) {
 			try (var conn = ConnectDB.getCon()) {
-				var sql = "INSERT INTO SANPHAM (MaSP, TenSP, MaLoai, MaNCC, MaDVT, DonGia, SoLuongTon, HanSuDung) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
+				var newMaSP = generateNewMaSP(conn);
+				var sql = "INSERT INTO SANPHAM (MaSP, TenSP, MaLoai, MaNCC, MaDVT, DonGia, SoLuongTon, HanSuDung, ImagePath) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
 				try (var pst = conn.prepareStatement(sql)) {
-					pst.setString(1, dialog.getMaSP());
+					pst.setString(1, newMaSP);
 					pst.setString(2, dialog.getTenSP());
 					pst.setString(3, dialog.getMaLoai());
 					pst.setString(4, dialog.getMaNCC());
@@ -487,6 +525,12 @@ public class ProductPanel extends JPanel {
 						pst.setNull(8, java.sql.Types.DATE);
 					} else {
 						pst.setDate(8, java.sql.Date.valueOf(hanSuDung));
+					}
+					var imagePath = dialog.getImagePath();
+					if (imagePath.isEmpty()) {
+						pst.setNull(9, java.sql.Types.VARCHAR);
+					} else {
+						pst.setString(9, imagePath);
 					}
 					pst.executeUpdate();
 
@@ -502,8 +546,22 @@ public class ProductPanel extends JPanel {
 		}
 	}
 
+	private String generateNewMaSP(Connection conn) throws SQLException {
+		var sql = "SELECT MAX(MaSP) FROM SANPHAM";
+		try (var stmt = conn.prepareStatement(sql); var rs = stmt.executeQuery()) {
+			if (rs.next()) {
+				var maxMaSP = rs.getString(1);
+				if (maxMaSP != null) {
+					var number = Integer.parseInt(maxMaSP.replace("SP", "")) + 1;
+					return String.format("SP%03d", number);
+				}
+			}
+			return "SP001";
+		}
+	}
+
 	private void editProduct(String maSP, String tenSP, String tenLoai, String tenNCC, String tenDVT, String donGia,
-			String soLuongTon, String hanSuDung) {
+			String soLuongTon, String hanSuDung, String imagePath) {
 		if (categories == null || suppliers == null || units == null) {
 			JOptionPane.showMessageDialog(this,
 					"Không thể tải dữ liệu tham chiếu. Vui lòng kiểm tra kết nối cơ sở dữ liệu.", "Lỗi",
@@ -512,12 +570,12 @@ public class ProductPanel extends JPanel {
 		}
 
 		var dialog = new ProductFormDialog((Frame) SwingUtilities.getWindowAncestor(this), "Sửa sản phẩm", maSP, tenSP,
-				tenLoai, tenNCC, tenDVT, donGia, soLuongTon, hanSuDung, "", categories, suppliers, units, false);
+				tenLoai, tenNCC, tenDVT, donGia, soLuongTon, hanSuDung, imagePath, categories, suppliers, units, false);
 		dialog.setVisible(true);
 
 		if (dialog.isConfirmed()) {
 			try (var conn = ConnectDB.getCon()) {
-				var sql = "UPDATE SANPHAM SET TenSP = ?, MaLoai = ?, MaNCC = ?, MaDVT = ?, DonGia = ?, SoLuongTon = ?, HanSuDung = ? WHERE MaSP = ?";
+				var sql = "UPDATE SANPHAM SET TenSP = ?, MaLoai = ?, MaNCC = ?, MaDVT = ?, DonGia = ?, SoLuongTon = ?, HanSuDung = ?, ImagePath = ? WHERE MaSP = ?";
 				try (var pst = conn.prepareStatement(sql)) {
 					pst.setString(1, dialog.getTenSP());
 					pst.setString(2, dialog.getMaLoai());
@@ -531,7 +589,13 @@ public class ProductPanel extends JPanel {
 					} else {
 						pst.setDate(7, java.sql.Date.valueOf(hanSuDungNew));
 					}
-					pst.setString(8, dialog.getMaSP());
+					var imagePathNew = dialog.getImagePath();
+					if (imagePathNew.isEmpty()) {
+						pst.setNull(8, java.sql.Types.VARCHAR);
+					} else {
+						pst.setString(8, imagePathNew);
+					}
+					pst.setString(9, dialog.getMaSP());
 
 					var rowsAffected = pst.executeUpdate();
 					if (rowsAffected > 0) {

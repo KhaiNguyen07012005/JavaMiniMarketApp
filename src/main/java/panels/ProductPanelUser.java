@@ -36,8 +36,6 @@ public class ProductPanelUser extends JPanel {
 	private CustomerService customerService;
 	private CartPanel cartPanel;
 	private JPanel productsContainer;
-
-	// Define the same modern color palette as ProductPanel
 	private static final Color PRIMARY_COLOR = new Color(33, 150, 243); // Blue
 	private static final Color SECONDARY_COLOR = new Color(244, 67, 54); // Red
 	private static final Color SUCCESS_COLOR = new Color(76, 175, 80); // Green
@@ -45,9 +43,7 @@ public class ProductPanelUser extends JPanel {
 	private static final Color CARD_COLOR = Color.WHITE; // White
 	private static final Color TEXT_COLOR = new Color(33, 37, 41); // Dark Gray
 	private static final Color BORDER_COLOR = new Color(206, 212, 218); // Gray
-	private static final Color TAB_SELECTED_COLOR = new Color(144, 202, 249); // Light Blue
-	private static final Color TAB_HOVER_COLOR = new Color(200, 220, 240); // Lighter Blue
-	private static final String DEFAULT_IMAGE_PATH = "/images/no-image.png"; // Default image in resources
+	private static final String DEFAULT_IMAGE_PATH = "/images/no-image.png";
 
 	public ProductPanelUser(CustomerService customerService, CartPanel cartPanel) {
 		this.customerService = customerService;
@@ -66,7 +62,8 @@ public class ProductPanelUser extends JPanel {
 				super.paintComponent(g);
 				var g2d = (Graphics2D) g;
 				g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-				var gp = new GradientPaint(0, 0, PRIMARY_COLOR, getWidth(), getHeight(), new Color(100, 181, 246));
+				var gp = new GradientPaint(0, 0, PRIMARY_COLOR, getWidth(), getHeight(),
+						new Color(100, 181, 246));
 				g2d.setPaint(gp);
 				g2d.fillRoundRect(0, 0, getWidth(), getHeight(), 15, 15);
 			}
@@ -138,7 +135,6 @@ public class ProductPanelUser extends JPanel {
 
 		add(filterPanel, BorderLayout.PAGE_START);
 
-		// Products container with FlowLayout
 		productsContainer = new JPanel();
 		productsContainer.setLayout(new FlowLayout(FlowLayout.LEFT, 15, 15));
 		productsContainer.setBackground(BACKGROUND_COLOR);
@@ -152,27 +148,23 @@ public class ProductPanelUser extends JPanel {
 	}
 
 	private void loadProducts(String search, String category, String priceRange) {
-		productsContainer.removeAll(); // Xóa các sản phẩm hiện tại
+		productsContainer.removeAll();
 
-		// Xây dựng truy vấn cơ bản
 		var query = new StringBuilder("""
 				SELECT sp.MaSP, sp.TenSP, sp.DonGia, sp.SoLuongTon, sp.ImagePath \
 				FROM SANPHAM sp \
 				LEFT JOIN LOAISP lsp ON sp.MaLoai = lsp.MaLoai \
 				WHERE sp.TenSP LIKE ?""");
 
-		// Thêm điều kiện lọc theo danh mục nếu không phải "Tất cả"
 		if (!category.equals("Tất cả")) {
 			query.append(" AND lsp.TenLoai = ?");
 		}
 
-		// Thêm điều kiện lọc theo giá nếu không phải "Tất cả"
 		if (!priceRange.equals("Tất cả")) {
 			query.append(" AND sp.DonGia ").append(getPriceCondition(priceRange));
 		}
 
 		try (var stmt = customerService.getConnection().prepareStatement(query.toString())) {
-			// Gán tham số cho truy vấn
 			stmt.setString(1, "%" + search + "%");
 			var paramIndex = 2;
 			if (!category.equals("Tất cả")) {
@@ -189,15 +181,14 @@ public class ProductPanelUser extends JPanel {
 				var soLuongTon = rs.getInt("SoLuongTon");
 				var imagePath = rs.getString("ImagePath");
 
-				// Load the image
-				var imageIcon = loadImage(imagePath);
-
-				// Tạo ProductCard và thêm vào container
+				// Load image from resources or file system
+				var imageIcon = loadIcon(
+						imagePath != null && !imagePath.trim().isEmpty() ? "/images/products/" + imagePath
+								: DEFAULT_IMAGE_PATH);
 				var productCard = new ProductCard(maSP, tenSP, donGia, soLuongTon, imageIcon);
 				productsContainer.add(productCard);
 			}
 
-			// Nếu không có sản phẩm nào, hiển thị thông báo
 			if (!hasProducts) {
 				JOptionPane.showMessageDialog(this, "Không tìm thấy sản phẩm phù hợp!", "Thông báo",
 						JOptionPane.INFORMATION_MESSAGE);
@@ -212,39 +203,48 @@ public class ProductPanelUser extends JPanel {
 		productsContainer.repaint();
 	}
 
-	private ImageIcon loadImage(String imagePath) {
+	private ImageIcon loadIcon(String path) {
+		System.out.println("Đang tải hình ảnh: " + path);
 		try {
-			// Nếu imagePath null hoặc rỗng, trả về ảnh mặc định
-			if (imagePath == null || imagePath.trim().isEmpty()) {
-				return getDefaultImage();
+			// Thử tải từ tài nguyên (classpath)
+			var imgURL = getClass().getResource(path);
+			if (imgURL != null) {
+				var icon = new ImageIcon(imgURL);
+				if (icon.getImage() != null) {
+					var image = icon.getImage().getScaledInstance(150, 150, Image.SCALE_SMOOTH);
+					return new ImageIcon(image);
+				}
 			}
+			System.err.println("Hình ảnh không tìm thấy trong tài nguyên: " + path);
 
-			// Giả sử imagePath là đường dẫn tương đối trong thư mục dự án
-			// (images/products/)
-			var imageFile = new File("images/products/" + imagePath);
+			// Thử tải từ file system (nếu không tìm thấy trong tài nguyên)
+			var imageFile = new File("images/products/" + path.replace("/images/products/", ""));
 			if (imageFile.exists()) {
-				var imageIcon = new ImageIcon(imageFile.getAbsolutePath());
-				var image = imageIcon.getImage().getScaledInstance(150, 150, Image.SCALE_SMOOTH);
-				return new ImageIcon(image);
+				var icon = new ImageIcon(imageFile.getAbsolutePath());
+				if (icon.getImage() != null) {
+					var image = icon.getImage().getScaledInstance(150, 150, Image.SCALE_SMOOTH);
+					return new ImageIcon(image);
+				}
 			}
-			System.err.println("Image file does not exist: " + imageFile.getAbsolutePath());
-			return getDefaultImage();
-		} catch (Exception e) {
-			System.err.println("Error loading image: " + imagePath);
-			e.printStackTrace();
-			return getDefaultImage();
-		}
-	}
+			System.err.println("Hình ảnh không tìm thấy trong file system: " + imageFile.getAbsolutePath());
 
-	private ImageIcon getDefaultImage() {
-		try {
-			// Tải ảnh mặc định từ resources
-			var icon = new ImageIcon(getClass().getResource(DEFAULT_IMAGE_PATH));
-			var image = icon.getImage().getScaledInstance(150, 150, Image.SCALE_SMOOTH);
-			return new ImageIcon(image);
+			// Tải hình ảnh mặc định
+			imgURL = getClass().getResource(DEFAULT_IMAGE_PATH);
+			if (imgURL != null) {
+				var defaultIcon = new ImageIcon(imgURL);
+				if (defaultIcon.getImage() != null) {
+					var image = defaultIcon.getImage().getScaledInstance(150, 150, Image.SCALE_SMOOTH);
+					return new ImageIcon(image);
+				}
+			}
+			System.err.println("Hình ảnh mặc định không tìm thấy: " + DEFAULT_IMAGE_PATH);
+
+			// Trả về ImageIcon rỗng nếu tất cả thất bại
+			return new ImageIcon();
 		} catch (Exception e) {
-			System.err.println("Error loading default image: " + DEFAULT_IMAGE_PATH);
-			return new ImageIcon(); // Trả về ImageIcon trống nếu lỗi
+			System.err.println("Lỗi tải hình ảnh: " + path + " - " + e.getMessage());
+			e.printStackTrace();
+			return new ImageIcon();
 		}
 	}
 
@@ -257,7 +257,6 @@ public class ProductPanelUser extends JPanel {
 		};
 	}
 
-	// ProductCard class to represent each product
 	private class ProductCard extends JPanel {
 		private String maSP;
 		private int soLuongTon;
@@ -266,18 +265,20 @@ public class ProductPanelUser extends JPanel {
 			this.maSP = maSP;
 			this.soLuongTon = soLuongTon;
 
+			System.out
+					.println("Tạo ProductCard cho: " + tenSP + ", ImageIcon hợp lệ: " + (imageIcon.getImage() != null));
+
 			setLayout(new BorderLayout(5, 5));
 			setBackground(CARD_COLOR);
 			setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(BORDER_COLOR, 1, true),
 					BorderFactory.createEmptyBorder(10, 10, 10, 10)));
 			setPreferredSize(new Dimension(200, 300));
 
-			// Image
 			var imageLabel = new JLabel(imageIcon);
 			imageLabel.setHorizontalAlignment(JLabel.CENTER);
+			imageLabel.setMinimumSize(new Dimension(150, 150));
 			add(imageLabel, BorderLayout.CENTER);
 
-			// Product info panel
 			var infoPanel = new JPanel();
 			infoPanel.setLayout(new BorderLayout());
 			infoPanel.setBackground(CARD_COLOR);
@@ -302,8 +303,8 @@ public class ProductPanelUser extends JPanel {
 		}
 
 		private void handleAddToCart(String maSP, String tenSP) {
-			var input = JOptionPane.showInputDialog(ProductPanelUser.this, "Nhập số lượng muốn thêm cho " + tenSP + ":",
-					"1");
+			var input = JOptionPane.showInputDialog(ProductPanelUser.this,
+					"Nhập số lượng muốn thêm cho " + tenSP + ":", "1");
 			if (input == null || input.trim().isEmpty()) {
 				return;
 			}
