@@ -30,7 +30,6 @@ import javax.swing.plaf.basic.BasicTabbedPaneUI;
 import connect.ConnectDB;
 import panels.CartPanel;
 import panels.InvoicePanelUser;
-import panels.LoginPanel;
 import panels.LoyaltyPanel;
 import panels.ProductPanelUser;
 import panels.ProfilePanel;
@@ -47,7 +46,7 @@ public class CustomerInterface extends JFrame {
 	private LoyaltyPanel loyaltyPanel;
 	private ProfilePanel profilePanel;
 	private SupportPanel supportPanel;
-	private LoginPanel loginPanel;
+//	private LoginPanel loginPanel;
 	private String maKH = "KH0001";
 	private boolean isMaximized = false;
 
@@ -228,10 +227,10 @@ public class CustomerInterface extends JFrame {
 		loyaltyPanel = new LoyaltyPanel(customerService, maKH);
 		profilePanel = new ProfilePanel(customerService, maKH);
 		supportPanel = new SupportPanel(customerService, maKH);
-		loginPanel = new LoginPanel(customerService);
+//		loginPanel = new LoginPanel(customerService);
 
 		// Bỏ icon để tránh lỗi
-		tabbedPane.addTab("Đăng Nhập/Đăng Ký", null, loginPanel);
+//		tabbedPane.addTab("Đăng Nhập/Đăng Ký", null, loginPanel);
 		tabbedPane.addTab("Sản Phẩm", null, productPanel);
 		tabbedPane.addTab("Giỏ Hàng", null, cartPanel);
 		tabbedPane.addTab("Hóa Đơn", null, invoicePanel);
@@ -257,14 +256,14 @@ public class CustomerInterface extends JFrame {
 			}
 		});
 
-		tabbedPane.addChangeListener(e -> {
-			if (tabbedPane.getSelectedComponent() != loginPanel) {
-				var newMaKH = loginPanel.getMaKH();
-				if (newMaKH != null && !newMaKH.equals(maKH)) {
-					updateMaKH(newMaKH);
-				}
-			}
-		});
+//		tabbedPane.addChangeListener(e -> {
+//			if (tabbedPane.getSelectedComponent() != loginPanel) {
+//				var newMaKH = loginPanel.getMaKH();
+//				if (newMaKH != null && !newMaKH.equals(maKH)) {
+//					updateMaKH(newMaKH);
+//				}
+//			}
+//		});
 
 		contentPanel.add(tabbedPane, BorderLayout.CENTER);
 		mainPanel.add(contentPanel, BorderLayout.CENTER);

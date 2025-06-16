@@ -11,8 +11,8 @@ import javax.swing.JOptionPane;
 
 public class CustomerService {
 	private Connection conn;
-	private Map<String, Integer> cart = new HashMap<>(); // Giỏ hàng: <MaSP, SoLuong>
-	private String maKH; // Mã khách hàng hiện tại
+	private Map<String, Integer> cart = new HashMap<>();
+	private String maKH;
 
 	public CustomerService(Connection conn) {
 		this.conn = conn;
@@ -37,7 +37,7 @@ public class CustomerService {
 			stmt.setString(2, password);
 			var rs = stmt.executeQuery();
 			if (rs.next()) {
-				this.maKH = username; // Lưu maKH sau khi đăng nhập thành công
+				this.maKH = username;
 				return true;
 			}
 			return false;
@@ -117,20 +117,28 @@ public class CustomerService {
 
 	// Thêm vào giỏ hàng
 	public boolean addToCart(String maSP, int quantity) {
+		System.out.println("Attempting to add to cart: maSP=" + maSP + ", quantity=" + quantity + ", maKH=" + maKH);
 		try {
 			var query = "SELECT SoLuongTon FROM SANPHAM WHERE MaSP = ?";
 			var stmt = conn.prepareStatement(query);
 			stmt.setString(1, maSP);
 			var rs = stmt.executeQuery();
-			if (rs.next() && rs.getInt("SoLuongTon") >= quantity) {
+			if (!rs.next()) {
+				System.out.println("Product not found: " + maSP);
+				return false;
+			}
+			var stock = rs.getInt("SoLuongTon");
+			System.out.println("Stock for " + maSP + ": " + stock);
+			if (stock >= quantity && quantity > 0) {
 				cart.put(maSP, cart.getOrDefault(maSP, 0) + quantity);
 				System.out.println("Added to cart: " + maSP + ", Quantity: " + quantity);
 				return true;
 			}
-			System.out.println("Failed to add to cart: " + maSP + ", Stock: "
-					+ (rs.next() ? rs.getInt("SoLuongTon") : "Not found"));
+			System.out.println(
+					"Failed to add: Insufficient stock (" + stock + ") or invalid quantity (" + quantity + ")");
 			return false;
 		} catch (SQLException e) {
+			System.err.println("Error adding to cart: " + e.getMessage());
 			e.printStackTrace();
 			return false;
 		}
@@ -146,7 +154,7 @@ public class CustomerService {
 		List<Object[]> cartItems = new ArrayList<>();
 		try {
 			for (String maSP : cart.keySet()) {
-				var query = "SELECT MaSP, TenSP, DonGia FROM SANPHAM WHERE MaSP = ?";
+				var query = "SELECT MaSP, TenSP, DonGia, ImagePath FROM SANPHAM WHERE MaSP = ?";
 				var stmt = conn.prepareStatement(query);
 				stmt.setString(1, maSP);
 				var rs = stmt.executeQuery();
@@ -154,10 +162,13 @@ public class CustomerService {
 					int quantity = cart.get(maSP);
 					var price = rs.getDouble("DonGia");
 					var total = price * quantity;
-					cartItems.add(new Object[] { maSP, rs.getString("TenSP"), quantity, price, total });
+					// Added ImagePath to the returned array
+					cartItems.add(new Object[] { maSP, rs.getString("TenSP"), quantity, price, total,
+							rs.getString("ImagePath") != null ? rs.getString("ImagePath") : "" });
 				}
 			}
 		} catch (SQLException e) {
+			System.err.println("Error loading cart: " + e.getMessage());
 			e.printStackTrace();
 		}
 		return cartItems;
@@ -274,13 +285,15 @@ public class CustomerService {
 	// Lấy thông tin khách hàng
 	public Object[] getCustomerInfo(String maKH) {
 		try {
-			var query = "SELECT MaKH, TenKH, SoDienThoai, DiemTichLuy FROM KHACHHANG WHERE MaKH = ?";
+			var query = "SELECT k.MaKH, k.TenKH, k.SoDienThoai, k.DiemTichLuy, t.Email, k.GioiTinh, k.NgaySinh "
+					+ "FROM KHACHHANG k LEFT JOIN TAIKHOAN t ON k.MaKH = t.TenDangNhap WHERE k.MaKH = ?";
 			var stmt = conn.prepareStatement(query);
 			stmt.setString(1, maKH);
 			var rs = stmt.executeQuery();
 			if (rs.next()) {
 				return new Object[] { rs.getString("MaKH"), rs.getString("TenKH"), rs.getString("SoDienThoai"),
-						rs.getInt("DiemTichLuy") };
+						rs.getInt("DiemTichLuy"), rs.getString("Email"), rs.getString("GioiTinh"),
+						rs.getDate("NgaySinh") };
 			}
 		} catch (SQLException e) {
 			e.printStackTrace();
@@ -288,25 +301,52 @@ public class CustomerService {
 		return null;
 	}
 
-	// Cập nhật thông tin khách hàng
-	public boolean updateCustomerInfo(String maKH, String name, String phone, String address) {
+	public boolean updateCustomerInfo(String maKH, String name, String phone, String address, String email,
+			String gender, String dob) {
 		try {
-			var updateKHQuery = "UPDATE KHACHHANG SET TenKH = ?, SoDienThoai = ? WHERE MaKH = ?";
+			conn.setAutoCommit(false);
+
+			var updateKHQuery = "UPDATE KHACHHANG SET TenKH = ?, SoDienThoai = ?, GioiTinh = ?, NgaySinh = ? WHERE MaKH = ?";
 			var khStmt = conn.prepareStatement(updateKHQuery);
 			khStmt.setString(1, name);
 			khStmt.setString(2, phone);
-			khStmt.setString(3, maKH);
+			khStmt.setString(3, gender);
+			khStmt.setString(4, dob);
+			khStmt.setString(5, maKH);
 			khStmt.executeUpdate();
 
+			// Cập nhật địa chỉ
 			var updateAddressQuery = "UPDATE DIACHI_KH SET DiaChi = ? WHERE MaKH = ? AND LaMacDinh = 1";
 			var addressStmt = conn.prepareStatement(updateAddressQuery);
 			addressStmt.setString(1, address);
 			addressStmt.setString(2, maKH);
 			addressStmt.executeUpdate();
+
+			// Cập nhật Email
+			if (email != null && !email.isEmpty()) {
+				var updateTKQuery = "UPDATE TAIKHOAN SET Email = ? WHERE TenDangNhap = ?";
+				var tkStmt = conn.prepareStatement(updateTKQuery);
+				tkStmt.setString(1, email);
+				tkStmt.setString(2, maKH);
+				tkStmt.executeUpdate();
+			}
+
+			conn.commit();
 			return true;
 		} catch (SQLException e) {
+			try {
+				conn.rollback();
+			} catch (SQLException rollbackEx) {
+				rollbackEx.printStackTrace();
+			}
 			e.printStackTrace();
 			return false;
+		} finally {
+			try {
+				conn.setAutoCommit(true);
+			} catch (SQLException e) {
+				e.printStackTrace();
+			}
 		}
 	}
 
@@ -415,4 +455,100 @@ public class CustomerService {
 		}
 	}
 
+	public String authenticateCustomer(String username, String password) {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	public String loginCustomer(String phone) {
+		try {
+			var query = "SELECT MaKH FROM KHACHHANG WHERE SoDienThoai = ?";
+			var stmt = conn.prepareStatement(query);
+			stmt.setString(1, phone);
+			var rs = stmt.executeQuery();
+			if (rs.next()) {
+				return rs.getString("MaKH");
+			}
+			return null;
+		} catch (SQLException e) {
+			e.printStackTrace();
+			return null;
+		}
+	}
+
+	public String registerCustomer(String name, String phone) {
+		try {
+			if (name == null || name.trim().isEmpty()) {
+				return "Họ tên không được để trống!";
+			}
+			if (phone == null || phone.trim().isEmpty()) {
+				return "Số điện thoại không được để trống!";
+			}
+			if (!phone.matches("\\d{10}")) {
+				return "Số điện thoại phải có 10 chữ số!";
+			}
+
+			var checkQuery = "SELECT COUNT(*) FROM KHACHHANG WHERE SoDienThoai = ?";
+			var checkStmt = conn.prepareStatement(checkQuery);
+			checkStmt.setString(1, phone);
+			var rs = checkStmt.executeQuery();
+			if (rs.next() && rs.getInt(1) > 0) {
+				return "Số điện thoại đã tồn tại!";
+			}
+
+			conn.setAutoCommit(false);
+
+			var maKHQuery = "SELECT 'KH' + RIGHT('0000' + CAST(COALESCE(MAX(CAST(SUBSTRING(MaKH, 3, LEN(MaKH)) AS INT)), 0) + 1 AS VARCHAR(4)), 4) FROM KHACHHANG";
+			var maKHStmt = conn.prepareStatement(maKHQuery);
+			var maKHRs = maKHStmt.executeQuery();
+			var maKH = "KH0001";
+			if (maKHRs.next()) {
+				maKH = maKHRs.getString(1);
+			}
+
+			var insertKHQuery = "INSERT INTO KHACHHANG (MaKH, TenKH, SoDienThoai, DiemTichLuy) VALUES (?, ?, ?, 0)";
+			var khStmt = conn.prepareStatement(insertKHQuery);
+			khStmt.setString(1, maKH);
+			khStmt.setString(2, name);
+			khStmt.setString(3, phone);
+			var khRows = khStmt.executeUpdate();
+			if (khRows != 1) {
+				conn.rollback();
+				return "Lỗi khi thêm khách hàng!";
+			}
+
+			conn.commit();
+			return maKH;
+		} catch (SQLException e) {
+			try {
+				conn.rollback();
+			} catch (SQLException rollbackEx) {
+				rollbackEx.printStackTrace();
+			}
+			e.printStackTrace();
+			return "Lỗi cơ sở dữ liệu: " + e.getMessage();
+		} finally {
+			try {
+				conn.setAutoCommit(true);
+			} catch (SQLException e) {
+				e.printStackTrace();
+			}
+		}
+	}
+
+	public boolean isCustomer(String username) {
+		try {
+			var query = "SELECT VaiTro FROM TAIKHOAN WHERE TenDangNhap = ?";
+			var stmt = conn.prepareStatement(query);
+			stmt.setString(1, username);
+			var rs = stmt.executeQuery();
+			if (rs.next()) {
+				return "Customer".equalsIgnoreCase(rs.getString("VaiTro"));
+			}
+			return false;
+		} catch (SQLException e) {
+			e.printStackTrace();
+			return false;
+		}
+	}
 }

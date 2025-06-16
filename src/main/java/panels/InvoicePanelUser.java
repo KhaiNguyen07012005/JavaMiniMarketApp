@@ -2,19 +2,30 @@ package panels;
 
 import java.awt.BorderLayout;
 import java.awt.Color;
+import java.awt.Cursor;
 import java.awt.FlowLayout;
+import java.awt.Font;
+import java.awt.Graphics;
+import java.awt.Graphics2D;
+import java.awt.RenderingHints;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.io.File;
 import java.io.IOException;
 import java.text.DecimalFormat;
 
+import javax.swing.BorderFactory;
+import javax.swing.ImageIcon;
 import javax.swing.JButton;
 import javax.swing.JFileChooser;
+import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
+import javax.swing.JSplitPane;
 import javax.swing.JTable;
+import javax.swing.border.EmptyBorder;
+import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
 
 import com.itextpdf.io.font.PdfEncodings;
@@ -30,75 +41,254 @@ import com.itextpdf.layout.element.Table;
 import com.itextpdf.layout.properties.TextAlignment;
 
 import service.CustomerService;
-import util.Constants;
 
 public class InvoicePanelUser extends JPanel {
 	private JTable invoiceTable, detailTable;
 	private DefaultTableModel invoiceModel, detailModel;
 	private CustomerService customerService;
 	private String maKH;
+	private JLabel statusLabel;
+	private static final Color HEADER_COLOR = new Color(0, 120, 215); // Blue from the title bar
+	private static final Color BACKGROUND_COLOR = new Color(240, 248, 255); // Light blue background
+	private static final Color TABLE_HEADER_COLOR = new Color(200, 220, 240); // Light Blue
+	private static final Color ALT_ROW_COLOR = new Color(240, 242, 245); // Very Light Gray
+	private static final DecimalFormat PRICE_FORMAT = new DecimalFormat("#,###.0");
 
 	public InvoicePanelUser(CustomerService customerService, String maKH) {
 		this.customerService = customerService;
 		this.maKH = maKH;
 		customerService.setMaKH(maKH);
 		setLayout(new BorderLayout());
+		setBackground(BACKGROUND_COLOR);
 		initializeComponents();
 	}
 
 	private void initializeComponents() {
-		invoiceModel = new DefaultTableModel(new String[] { "Mã HD", "Ngày Lập", "Tổng Tiền" }, 0);
-		invoiceTable = new JTable(invoiceModel);
-		invoiceTable.addMouseListener(new MouseAdapter() {
-			@Override
-			public void mouseClicked(MouseEvent e) {
-				if (e.getClickCount() == 2) {
-					var selectedRow = invoiceTable.getSelectedRow();
-					if (selectedRow >= 0) {
-						var maHD = (String) invoiceModel.getValueAt(selectedRow, 0);
-						loadInvoiceDetails(maHD);
-					}
+		// Header Panel
+		var headerPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
+		headerPanel.setBackground(HEADER_COLOR);
+		headerPanel.setBorder(new EmptyBorder(5, 10, 5, 10));
+		var titleLabel = new JLabel("Grocery Store - Khách Hàng");
+		titleLabel.setForeground(Color.WHITE);
+		titleLabel.setFont(new Font("Segoe UI", Font.BOLD, 16));
+		headerPanel.add(titleLabel);
+		add(headerPanel, BorderLayout.NORTH);
+
+		// Menu Panel (Simulated horizontal menu)
+		var menuPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+		menuPanel.setBackground(BACKGROUND_COLOR);
+		menuPanel.setBorder(new EmptyBorder(5, 10, 5, 10));
+		String[] menuItems = { "Đăng Nhập/Đăng Ký", "Sản Phẩm", "Giỏ Hàng", "Hóa Đơn", "Tích Điểm & Ưu Đãi",
+				"Thông Tin Của Nhân", "Hỗ Trợ" };
+		for (String item : menuItems) {
+			var menuButton = new JButton(item);
+			menuButton.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+			menuButton.setBorder(BorderFactory.createEmptyBorder(5, 10, 5, 10));
+			menuButton.setContentAreaFilled(false);
+			menuButton.setFocusPainted(false);
+			menuButton.setCursor(new Cursor(Cursor.HAND_CURSOR));
+			menuButton.addMouseListener(new MouseAdapter() {
+				@Override
+				public void mouseEntered(MouseEvent e) {
+					menuButton.setForeground(HEADER_COLOR);
 				}
+
+				@Override
+				public void mouseExited(MouseEvent e) {
+					menuButton.setForeground(Color.BLACK);
+				}
+			});
+			menuPanel.add(menuButton);
+		}
+		add(menuPanel, BorderLayout.CENTER);
+
+		// Invoice Filter
+		var filterPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+		filterPanel.setBackground(BACKGROUND_COLOR);
+		filterPanel.setBorder(new EmptyBorder(5, 10, 5, 10));
+		var filterLabel = new JLabel("Chọn hóa đơn để xem chi tiết:");
+		filterLabel.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+		var filterButton = new JButton("Tất cả");
+		filterButton.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+		filterButton.setBackground(Color.WHITE);
+		filterButton.setBorder(BorderFactory.createLineBorder(Color.GRAY));
+		filterButton.setFocusPainted(false);
+		filterPanel.add(filterLabel);
+		filterPanel.add(filterButton);
+		add(filterPanel, BorderLayout.NORTH);
+
+		// Invoice Table
+		invoiceModel = new DefaultTableModel(new String[] { "Mã HD", "Ngày Lập", "Tổng Tiền" }, 0);
+		invoiceTable = new JTable(invoiceModel) {
+			@Override
+			public java.awt.Component prepareRenderer(javax.swing.table.TableCellRenderer renderer, int row,
+					int column) {
+				var c = super.prepareRenderer(renderer, row, column);
+				c.setBackground(row % 2 == 0 ? Color.WHITE : ALT_ROW_COLOR);
+				if (isRowSelected(row)) {
+					c.setBackground(HEADER_COLOR.brighter());
+				}
+				return c;
 			}
-		});
+		};
+		invoiceTable.setRowHeight(30);
+		invoiceTable.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+		invoiceTable.getTableHeader().setFont(new Font("Segoe UI", Font.BOLD, 14));
+		invoiceTable.getTableHeader().setBackground(TABLE_HEADER_COLOR);
+		invoiceTable.setSelectionMode(javax.swing.ListSelectionModel.SINGLE_SELECTION);
+		invoiceTable.getColumnModel().getColumn(0).setPreferredWidth(100); // Mã HD
+		invoiceTable.getColumnModel().getColumn(1).setPreferredWidth(150); // Ngày Lập
+		invoiceTable.getColumnModel().getColumn(2).setPreferredWidth(120); // Tổng Tiền
+
+		var centerRenderer = new DefaultTableCellRenderer();
+		centerRenderer.setHorizontalAlignment(DefaultTableCellRenderer.CENTER);
+		for (var i = 0; i < invoiceTable.getColumnCount(); i++) {
+			invoiceTable.getColumnModel().getColumn(i).setCellRenderer(centerRenderer);
+		}
+
 		var invoiceScrollPane = new JScrollPane(invoiceTable);
-		add(invoiceScrollPane, BorderLayout.CENTER);
+		invoiceScrollPane.setBorder(BorderFactory.createLineBorder(Color.GRAY));
 
+		// Detail Table
 		detailModel = new DefaultTableModel(new String[] { "Mã SP", "Tên SP", "Số Lượng", "Đơn Giá" }, 0);
-		detailTable = new JTable(detailModel);
-		var detailScrollPane = new JScrollPane(detailTable);
-		add(detailScrollPane, BorderLayout.SOUTH);
+		detailTable = new JTable(detailModel) {
+			@Override
+			public java.awt.Component prepareRenderer(javax.swing.table.TableCellRenderer renderer, int row,
+					int column) {
+				var c = super.prepareRenderer(renderer, row, column);
+				c.setBackground(row % 2 == 0 ? Color.WHITE : ALT_ROW_COLOR);
+				return c;
+			}
+		};
+		detailTable.setRowHeight(30);
+		detailTable.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+		detailTable.getTableHeader().setFont(new Font("Segoe UI", Font.BOLD, 14));
+		detailTable.getTableHeader().setBackground(TABLE_HEADER_COLOR);
+		detailTable.getColumnModel().getColumn(0).setPreferredWidth(100); // Mã SP
+		detailTable.getColumnModel().getColumn(1).setPreferredWidth(200); // Tên SP
+		detailTable.getColumnModel().getColumn(2).setPreferredWidth(80); // Số Lượng
+		detailTable.getColumnModel().getColumn(3).setPreferredWidth(120); // Đơn Giá
+		for (var i = 0; i < detailTable.getColumnCount(); i++) {
+			detailTable.getColumnModel().getColumn(i).setCellRenderer(centerRenderer);
+		}
 
-		var printButton = createStyledButton("In Hóa Đơn");
+		var detailScrollPane = new JScrollPane(detailTable);
+		detailScrollPane.setBorder(BorderFactory.createLineBorder(Color.GRAY));
+
+		// Split Pane for Tables
+		var splitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, invoiceScrollPane, detailScrollPane);
+		splitPane.setDividerLocation(200);
+		splitPane.setResizeWeight(0.5);
+		splitPane.setBorder(BorderFactory.createEmptyBorder());
+		add(splitPane, BorderLayout.CENTER);
+
+		// Button Panel
+		var buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 5));
+		buttonPanel.setBackground(BACKGROUND_COLOR);
+		buttonPanel.setBorder(new EmptyBorder(10, 10, 10, 10));
+
+		var printButton = createStyledButton("In Hóa Đơn", 'P');
+		printButton.setToolTipText("In hóa đơn thành file PDF");
 		printButton.addActionListener(e -> printInvoice());
-		var buttonPanel = new JPanel(new FlowLayout());
+
+		var viewButton = createStyledButton("Xem Chi Tiết", 'V');
+		viewButton.setToolTipText("Xem chi tiết hóa đơn được chọn");
+		viewButton.addActionListener(e -> viewInvoiceDetails());
+
+		var refreshButton = createStyledButton("Làm Mới", 'R');
+		refreshButton.setToolTipText("Tải lại danh sách hóa đơn");
+		var refreshIcon = loadIcon("/icons/refresh.png");
+		if (refreshIcon != null) {
+			refreshButton.setIcon(refreshIcon);
+		}
+		refreshButton.addActionListener(e -> {
+			loadInvoices();
+			detailModel.setRowCount(0);
+			statusLabel.setText("Danh sách hóa đơn đã được làm mới.");
+		});
+
 		buttonPanel.add(printButton);
-		add(buttonPanel, BorderLayout.NORTH);
+		buttonPanel.add(viewButton);
+		buttonPanel.add(refreshButton);
+		add(buttonPanel, BorderLayout.SOUTH);
+
+		// Status Label
+		statusLabel = new JLabel("Chọn hóa đơn để xem chi tiết.");
+		statusLabel.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+		statusLabel.setForeground(Color.DARK_GRAY);
+		var statusPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+		statusPanel.setBackground(BACKGROUND_COLOR);
+		statusPanel.setBorder(new EmptyBorder(5, 10, 5, 10));
+		statusPanel.add(statusLabel);
+		add(statusPanel, BorderLayout.NORTH);
 
 		loadInvoices();
 	}
 
-	private JButton createStyledButton(String text) {
-		var button = new JButton(text);
-		button.setBackground(Constants.BUTTON_COLOR);
+	private JButton createStyledButton(String text, char mnemonic) {
+		var button = new JButton(text) {
+			@Override
+			protected void paintComponent(Graphics g) {
+				var g2d = (Graphics2D) g;
+				g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+				g2d.setColor(getBackground());
+				g2d.fillRoundRect(0, 0, getWidth(), getHeight(), 10, 10);
+				super.paintComponent(g);
+			}
+
+			@Override
+			protected void paintBorder(Graphics g) {
+				var g2d = (Graphics2D) g;
+				g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+				g2d.setColor(new Color(0, 0, 0, 50));
+				g2d.drawRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 10, 10);
+			}
+		};
+		button.setBackground(HEADER_COLOR);
 		button.setForeground(Color.WHITE);
+		button.setFont(new Font("Segoe UI", Font.BOLD, 14));
+		button.setFocusPainted(false);
+		button.setBorder(new EmptyBorder(8, 15, 8, 15));
+		button.setCursor(new Cursor(Cursor.HAND_CURSOR));
+		button.setMnemonic(mnemonic);
 		button.addMouseListener(new MouseAdapter() {
 			@Override
 			public void mouseEntered(MouseEvent e) {
-				button.setBackground(Constants.BUTTON_HOVER_COLOR);
+				button.setBackground(HEADER_COLOR.brighter());
 			}
 
 			@Override
 			public void mouseExited(MouseEvent e) {
-				button.setBackground(Constants.BUTTON_COLOR);
+				button.setBackground(HEADER_COLOR);
 			}
 		});
 		return button;
 	}
 
+	private ImageIcon loadIcon(String path) {
+		try {
+			var imgURL = getClass().getResource(path);
+			if (imgURL != null) {
+				var icon = new ImageIcon(imgURL);
+				if (icon.getImage() != null) {
+					var image = icon.getImage().getScaledInstance(24, 24, java.awt.Image.SCALE_SMOOTH);
+					return new ImageIcon(image);
+				}
+			}
+			System.err.println("Icon không tìm thấy: " + path);
+			return null;
+		} catch (Exception e) {
+			System.err.println("Lỗi tải icon: " + path + " - " + e.getMessage());
+			return null;
+		}
+	}
+
 	private void loadInvoices() {
 		invoiceModel.setRowCount(0);
 		for (Object[] invoice : customerService.getInvoices(maKH)) {
+			if (invoice[2] != null) {
+				invoice[2] = PRICE_FORMAT.format(Double.parseDouble(invoice[2].toString())) + " VNĐ";
+			}
 			invoiceModel.addRow(invoice);
 		}
 	}
@@ -108,6 +298,9 @@ public class InvoicePanelUser extends JPanel {
 		var details = customerService.getInvoiceDetails(maHD);
 		System.out.println("Số dòng chi tiết cho hóa đơn " + maHD + ": " + details.size());
 		for (Object[] detail : details) {
+			if (detail[3] != null) {
+				detail[3] = PRICE_FORMAT.format(Double.parseDouble(detail[3].toString())) + " VNĐ";
+			}
 			System.out.println("Dữ liệu chi tiết: Mã SP=" + detail[0] + ", Tên SP=" + detail[1] + ", Số Lượng="
 					+ detail[2] + ", Đơn Giá=" + detail[3]);
 			detailModel.addRow(detail);
@@ -115,9 +308,23 @@ public class InvoicePanelUser extends JPanel {
 		System.out.println("Số dòng trong detailModel sau khi thêm: " + detailModel.getRowCount());
 	}
 
+	private void viewInvoiceDetails() {
+		var selectedRow = invoiceTable.getSelectedRow();
+		if (selectedRow < 0) {
+			statusLabel.setText("Vui lòng chọn một hóa đơn.");
+			JOptionPane.showMessageDialog(this, "Vui lòng chọn hóa đơn để xem chi tiết!", "Thông báo",
+					JOptionPane.WARNING_MESSAGE);
+			return;
+		}
+		var maHD = (String) invoiceModel.getValueAt(selectedRow, 0);
+		loadInvoiceDetails(maHD);
+		statusLabel.setText("Chi tiết hóa đơn " + maHD + " đã được tải.");
+	}
+
 	private void printInvoice() {
 		var selectedRow = invoiceTable.getSelectedRow();
 		if (selectedRow < 0) {
+			statusLabel.setText("Vui lòng chọn một hóa đơn.");
 			JOptionPane.showMessageDialog(this, "Vui lòng chọn hóa đơn để in!", "Lỗi", JOptionPane.ERROR_MESSAGE);
 			return;
 		}
@@ -151,15 +358,13 @@ public class InvoicePanelUser extends JPanel {
 
 			PdfFont font;
 			try {
-				// Dùng IDENTITY_H để hỗ trợ tiếng Việt, iTextPDF sẽ tự động nhúng font
 				font = PdfFontFactory.createFont("src/main/resources/fonts/DejaVuSans.ttf", PdfEncodings.IDENTITY_H);
 			} catch (IOException e) {
 				System.out.println("Không tìm thấy font DejaVuSans, dùng font mặc định...");
 				font = PdfFontFactory.createFont(StandardFonts.TIMES_ROMAN);
 			}
 
-			// Thông tin cửa hàng
-			var storeInfo = new Paragraph("CỬA HÀNG BÁN LẺ ABC").setFont(font).setFontSize(14).setBold()
+			var storeInfo = new Paragraph("CỬA HÀNG BÁN LẺ VINMART").setFont(font).setFontSize(14).setBold()
 					.setTextAlignment(TextAlignment.CENTER);
 			document.add(storeInfo);
 			document.add(new Paragraph("Địa chỉ: 123 Đường Lê Lợi, Quận 1, TP. HCM").setFont(font).setFontSize(10)
@@ -168,23 +373,17 @@ public class InvoicePanelUser extends JPanel {
 					.setTextAlignment(TextAlignment.CENTER));
 			document.add(new Paragraph("\n"));
 
-			// Tiêu đề hóa đơn
 			var title = new Paragraph("HÓA ĐƠN BÁN HÀNG").setFont(font).setFontSize(16).setBold()
 					.setTextAlignment(TextAlignment.CENTER);
 			document.add(title);
 
-			// Thông tin hóa đơn
 			document.add(new Paragraph("Mã Hóa Đơn: " + maHD).setFont(font).setFontSize(12));
 			document.add(new Paragraph("Ngày Lập: " + invoiceModel.getValueAt(selectedRow, 1)).setFont(font)
 					.setFontSize(12));
-
-			var df = new DecimalFormat("#,###.0");
-			var totalAmount = df.format(Double.parseDouble(String.valueOf(invoiceModel.getValueAt(selectedRow, 2))))
-					+ " VNĐ";
+			var totalAmount = invoiceModel.getValueAt(selectedRow, 2).toString();
 			document.add(new Paragraph("Tổng Tiền: " + totalAmount).setFont(font).setFontSize(12));
 			document.add(new Paragraph("\n"));
 
-			// Tạo bảng chi tiết hóa đơn
 			var table = new Table(new float[] { 15f, 40f, 15f, 20f });
 			table.setWidth(com.itextpdf.kernel.geom.PageSize.A4.getWidth() - 50);
 			table.addHeaderCell(new com.itextpdf.layout.element.Cell().add(new Paragraph("Mã SP").setFont(font))
@@ -220,19 +419,21 @@ public class InvoicePanelUser extends JPanel {
 			}
 			document.add(table);
 
-			// Lời cảm ơn
 			document.add(new Paragraph("\n"));
 			document.add(new Paragraph("Cảm ơn quý khách đã mua hàng!").setFont(font).setFontSize(10)
 					.setTextAlignment(TextAlignment.CENTER));
 
 			document.close();
+			statusLabel.setText("Hóa đơn " + maHD + " đã được in thành công.");
 			JOptionPane.showMessageDialog(this,
 					"In hóa đơn thành công! File được lưu tại: " + outputFile.getAbsolutePath());
 		} catch (IOException e) {
+			statusLabel.setText("Lỗi khi in hóa đơn.");
 			e.printStackTrace();
 			JOptionPane.showMessageDialog(this, "Lỗi khi in hóa đơn: " + e.getMessage() + "\nChi tiết: " + e.getCause(),
 					"Lỗi", JOptionPane.ERROR_MESSAGE);
 		} catch (Exception e) {
+			statusLabel.setText("Lỗi không xác định khi in hóa đơn.");
 			e.printStackTrace();
 			JOptionPane.showMessageDialog(this, "Lỗi không xác định: " + e.getMessage(), "Lỗi",
 					JOptionPane.ERROR_MESSAGE);
@@ -244,5 +445,6 @@ public class InvoicePanelUser extends JPanel {
 		customerService.setMaKH(newMaKH);
 		loadInvoices();
 		detailModel.setRowCount(0);
+		statusLabel.setText("Đã cập nhật khách hàng: " + newMaKH);
 	}
 }
