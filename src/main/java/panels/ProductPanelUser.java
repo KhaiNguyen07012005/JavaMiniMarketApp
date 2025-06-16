@@ -43,6 +43,7 @@ public class ProductPanelUser extends JPanel {
 	private static final Color CARD_COLOR = Color.WHITE; // White
 	private static final Color TEXT_COLOR = new Color(33, 37, 41); // Dark Gray
 	private static final Color BORDER_COLOR = new Color(206, 212, 218); // Gray
+	private static final Color REFRESH_COLOR = new Color(100, 100, 100); // Gray for refresh button
 	private static final String DEFAULT_IMAGE_PATH = "/images/no-image.png";
 
 	public ProductPanelUser(CustomerService customerService, CartPanel cartPanel) {
@@ -62,8 +63,7 @@ public class ProductPanelUser extends JPanel {
 				super.paintComponent(g);
 				var g2d = (Graphics2D) g;
 				g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-				var gp = new GradientPaint(0, 0, PRIMARY_COLOR, getWidth(), getHeight(),
-						new Color(100, 181, 246));
+				var gp = new GradientPaint(0, 0, PRIMARY_COLOR, getWidth(), getHeight(), new Color(100, 181, 246));
 				g2d.setPaint(gp);
 				g2d.fillRoundRect(0, 0, getWidth(), getHeight(), 15, 15);
 			}
@@ -105,8 +105,17 @@ public class ProductPanelUser extends JPanel {
 		searchField.addActionListener(e -> loadProducts(searchField.getText(),
 				(String) categoryFilter.getSelectedItem(), (String) priceFilter.getSelectedItem()));
 
-		filterPanel.add(searchLabel);
-		filterPanel.add(searchField);
+		var btnRefresh = createStyledButton("Làm mới", REFRESH_COLOR);
+		var refreshIcon = loadIcon("/icons/refresh.png");
+		if (refreshIcon != null) {
+			btnRefresh.setIcon(refreshIcon);
+		}
+		btnRefresh.addActionListener(e -> {
+			searchField.setText("");
+			categoryFilter.setSelectedItem("Tất cả");
+			priceFilter.setSelectedItem("Tất cả");
+			loadProducts("", "Tất cả", "Tất cả");
+		});
 
 		var categoryLabel = new JLabel("Danh mục:");
 		categoryLabel.setFont(new Font("Segoe UI", Font.PLAIN, 15));
@@ -118,8 +127,6 @@ public class ProductPanelUser extends JPanel {
 		categoryFilter.setBorder(BorderFactory.createLineBorder(BORDER_COLOR, 1, true));
 		categoryFilter.addActionListener(e -> loadProducts(searchField.getText(),
 				(String) categoryFilter.getSelectedItem(), (String) priceFilter.getSelectedItem()));
-		filterPanel.add(categoryLabel);
-		filterPanel.add(categoryFilter);
 
 		var priceLabel = new JLabel("Giá:");
 		priceLabel.setFont(new Font("Segoe UI", Font.PLAIN, 15));
@@ -130,6 +137,12 @@ public class ProductPanelUser extends JPanel {
 		priceFilter.setBorder(BorderFactory.createLineBorder(BORDER_COLOR, 1, true));
 		priceFilter.addActionListener(e -> loadProducts(searchField.getText(),
 				(String) categoryFilter.getSelectedItem(), (String) priceFilter.getSelectedItem()));
+
+		filterPanel.add(searchLabel);
+		filterPanel.add(searchField);
+		filterPanel.add(btnRefresh);
+		filterPanel.add(categoryLabel);
+		filterPanel.add(categoryFilter);
 		filterPanel.add(priceLabel);
 		filterPanel.add(priceFilter);
 
@@ -303,8 +316,8 @@ public class ProductPanelUser extends JPanel {
 		}
 
 		private void handleAddToCart(String maSP, String tenSP) {
-			var input = JOptionPane.showInputDialog(ProductPanelUser.this,
-					"Nhập số lượng muốn thêm cho " + tenSP + ":", "1");
+			var input = JOptionPane.showInputDialog(ProductPanelUser.this, "Nhập số lượng muốn thêm cho " + tenSP + ":",
+					"1");
 			if (input == null || input.trim().isEmpty()) {
 				return;
 			}
